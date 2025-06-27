@@ -66,80 +66,37 @@ Below are the solutions for each question in this project:
 
 ### Q1: List All Distinct Users and Their Stats
 ```sql
-SELECT 
-    username,
-    COUNT(id) AS total_submissions,
-    SUM(points) AS points_earned
-FROM user_submissions
-GROUP BY username
-ORDER BY total_submissions DESC;
+select distinct user_id,username,count(question_id) as total_questions,sum(points) as total_points from user_data
+group by 1,2 order by 4 desc
 ```
 
 ### Q2: Calculate the Daily Average Points for Each User
 ```sql
-SELECT 
-    TO_CHAR(submitted_at, 'DD-MM') AS day,
-    username,
-    AVG(points) AS daily_avg_points
-FROM user_submissions
-GROUP BY 1, 2
-ORDER BY username;
+select  user_id,username,to_char(to_date(split_part(submitted_at,' ',1),'yyy-mm-dd'),'DD-MM') as days,round(avg(points)::numeric,2) as daily_average_points from user_data
+group by 1,2,3 order by 1
 ```
 
 ### Q3: Find the Top 3 Users with the Most Correct Submissions for Each Day
 ```sql
-WITH daily_submissions AS (
-    SELECT 
-        TO_CHAR(submitted_at, 'DD-MM') AS daily,
-        username,
-        SUM(CASE WHEN points > 0 THEN 1 ELSE 0 END) AS correct_submissions
-    FROM user_submissions
-    GROUP BY 1, 2
-),
-users_rank AS (
-    SELECT 
-        daily,
-        username,
-        correct_submissions,
-        DENSE_RANK() OVER(PARTITION BY daily ORDER BY correct_submissions DESC) AS rank
-    FROM daily_submissions
-)
-SELECT 
-    daily,
-    username,
-    correct_submissions
-FROM users_rank
-WHERE rank <= 3;
+with cte as(select*,dense_rank() over(partition by submit_date order by correct_count desc) as ranks from(
+select split_part(submitted_at,' ',1) as submit_date,username,count(question_id) as correct_count from user_data
+where points>0
+group by 1,2 order by 1) as ranked_data)
+select * from cte where ranks<4
 ```
 
 ### Q4: Find the Top 5 Users with the Highest Number of Incorrect Submissions
 ```sql
-SELECT 
-    username,
-    SUM(CASE WHEN points < 0 THEN 1 ELSE 0 END) AS incorrect_submissions,
-    SUM(CASE WHEN points > 0 THEN 1 ELSE 0 END) AS correct_submissions,
-    SUM(CASE WHEN points < 0 THEN points ELSE 0 END) AS incorrect_submissions_points,
-    SUM(CASE WHEN points > 0 THEN points ELSE 0 END) AS correct_submissions_points_earned,
-    SUM(points) AS points_earned
-FROM user_submissions
-GROUP BY 1
-ORDER BY incorrect_submissions DESC;
+select user_id,username,count(question_id) as incorrect_submissions from user_data
+where points<0
 ```
 
 ### Q5: Find the Top 10 Performers for Each Week
 ```sql
-SELECT *  
-FROM (
-    SELECT 
-        EXTRACT(WEEK FROM submitted_at) AS week_no,
-        username,
-        SUM(points) AS total_points_earned,
-        DENSE_RANK() OVER(PARTITION BY EXTRACT(WEEK FROM submitted_at) ORDER BY SUM(points) DESC) AS rank
-    FROM user_submissions
-    GROUP BY 1, 2
-    ORDER BY week_no, total_points_earned DESC
-)
-WHERE rank <= 10;
+with cte as(select *,dense_rank() over(partition by weeks order by total_points desc) as ranks from(
+select extract(week from to_date(split_part(submitted_at,' ',1),'yyyy-mm-dd')) as weeks,user_id,username,count(question_id) as total_submissions,sum(points) as total_points from user_data
+group by 1,2,3 order by 1 ) as ranked_data)
+select * from cte where ranks<=10
 ```
 
 ## Conclusion
